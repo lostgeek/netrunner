@@ -27,6 +27,7 @@
    "draw" core/click-draw
    "dynamic-ability" core/play-dynamic-ability
    "end-phase-12" core/end-phase-12
+   "start-next-phase" core/start-next-phase
    "end-turn" core/end-turn
    "jack-out" core/jack-out
    "keep" core/keep-hand
