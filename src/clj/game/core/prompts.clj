@@ -93,7 +93,9 @@
           (resolve-ability state side (:ability selected) (:card curprompt) cards))
       (if-let [cancel-effect (:cancel-effect curprompt)]
         (cancel-effect nil)
-        (effect-completed state side (:eid (:ability selected)))))))
+        (effect-completed state side (:eid (:ability selected)))))
+    (if-let [end-effect (:end-effect curprompt)]
+      (end-effect state side (:eid curprompt) (:card curprompt) nil))))
 
 (defn show-select
   "A select prompt uses a targeting cursor so the user can click their desired target of the ability.

@@ -1228,40 +1228,33 @@
     (click-card state :corp (get-program state 0))
     (is (= 1 (count (:hand (get-runner)))) "Runner has 1 card in hand")
     (click-prompt state :runner "Pay 0 [Credits] to trash") ; trash
-    ;; TODO: Understand weird :waiting prompt on Runner side here:
-    ;; Corp: 
-    ;; Type: nil
-    ;; 
-    ;; Runner: Waiting for Corp to resolve runner-trash triggers
-    ;; Type: :waiting
-    ; (run-empty-server state "Archives")
-    ; (is (empty? (:prompt (get-corp))) "No prompt from Archives access")
-    ; (is (= 1 (count (:hand (get-runner)))) "Runner has 1 card in hand")
-    ; (run-on state "Server 1")
-    ; (run-next-phase state)
-    ; (run-successful state)
-    ; (click-prompt state :corp "0") ; trace
-    ; (click-prompt state :runner "0")
-    ; (is (= 1 (count (:hand (get-runner)))) "Runner has 1 card in hand")
-    ; (click-card state :corp (get-resource state 0))
-    ; (is (= 2 (count (:hand (get-runner)))) "Runner has 2 cards in hand")
-    ; (click-prompt state :runner "No action") ; trash
-    ; (run-on state "HQ")
-    ; (run-next-phase state)
-    ; (run-successful state)
-    ; (click-prompt state :corp "0") ; trace
-    ; (click-prompt state :runner "0")
-    ; (click-prompt state :corp "Done")
-    ; (click-prompt state :runner "No action") ; trash
-    ; (is (empty? (:prompt (get-corp))) "Prompt closes after done")
-    ; (is (= 2 (count (:hand (get-runner)))) "Runner has 2 cards in hand")
-    ; (run-on state "HQ")
-    ; (run-next-phase state)
-    ; (run-successful state)
-    ; (click-prompt state :corp "0") ; trace
-    ; (click-prompt state :runner "5")
-    ; (is (empty? (:prompt (get-corp))) "Prompt closes after lost trace")
-    ))
+    (run-empty-server state "Archives")
+    (is (empty? (:prompt (get-corp))) "No prompt from Archives access")
+    (is (= 1 (count (:hand (get-runner)))) "Runner has 1 card in hand")
+    (run-on state "Server 1")
+    (run-next-phase state)
+    (run-successful state)
+    (click-prompt state :corp "0") ; trace
+    (click-prompt state :runner "0")
+    (is (= 1 (count (:hand (get-runner)))) "Runner has 1 card in hand")
+    (click-card state :corp (get-resource state 0))
+    (is (= 2 (count (:hand (get-runner)))) "Runner has 2 cards in hand")
+    (click-prompt state :runner "No action") ; trash
+    (run-on state "HQ")
+    (run-next-phase state)
+    (run-successful state)
+    (click-prompt state :corp "0") ; trace
+    (click-prompt state :runner "0")
+    (click-prompt state :corp "Done")
+    (click-prompt state :runner "No action") ; trash
+    (is (empty? (:prompt (get-corp))) "Prompt closes after done")
+    (is (= 2 (count (:hand (get-runner)))) "Runner has 2 cards in hand")
+    (run-on state "HQ")
+    (run-next-phase state)
+    (run-successful state)
+    (click-prompt state :corp "0") ; trace
+    (click-prompt state :runner "5")
+    (is (empty? (:prompt (get-corp))) "Prompt closes after lost trace")))
 
 (deftest jinja-city-grid
   ;; Jinja City Grid - install drawn ice, lowering install cost by 4
