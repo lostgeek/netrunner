@@ -2904,6 +2904,27 @@
           (card-ability state :runner (get-hardware state 0) 0)
           (click-card state :runner "Corroder"))
         (is (get-program state 0) "Corroder is installed for free")))
+    (testing "with a program trashed this turn before Simulchip install"
+      (do-game
+        (new-game {:corp {:deck [(qty "Hedge Fund" 5)]
+                          :hand ["SDS Drone Deployment"]}
+                   :runner {:hand ["Simulchip" "Corroder"]
+                            :discard ["Mantle"]
+                            :credits 3}})
+        (play-from-hand state :corp "SDS Drone Deployment" "New remote")
+        (take-credits state :corp)
+        (core/gain state :runner :click 4)
+        (play-from-hand state :runner "Corroder")
+        (run-empty-server state :remote1)
+        (click-prompt state :runner "Pay to steal")
+        (click-card state :runner "Corroder")
+        (play-from-hand state :runner "Simulchip")
+        (changes-val-macro
+          0 (:credit (get-runner))
+          "Corroder is installed for free"
+          (card-ability state :runner (get-hardware state 0) 0)
+          (click-card state :runner "Corroder"))
+        (is (get-program state 0) "Corroder is installed for free")))
     (testing "with no program trashed this turn"
       (do-game
         (new-game {:corp {:deck [(qty "Hedge Fund" 5)]

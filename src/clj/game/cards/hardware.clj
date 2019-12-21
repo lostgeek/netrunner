@@ -1679,34 +1679,38 @@
                                 :type :recurring}}})
 
 (define-card "Simulchip"
-  {:abilities [{:async true
-                :trash-icon true
-                :label "[trash]: Install a program from the heap"
-                :req (req (and (not (install-locked? state side))
-                               (some #(and (program? %)
-                                           (can-pay? state side (assoc eid :source card :source-type :runner-install) % nil
-                                                     [:credit (install-cost state side % {:cost-bonus -3})]))
-                                     (:discard runner))))
-                :effect
-                (effect
-                  (continue-ability
-                    (merge
-                      (when (let [pred #(and (runner? (first %))
-                                             (installed? (first %))
-                                             (program? (first %)))]
-                              (zero? (+ (event-count state nil :runner-trash pred)
-                                        (event-count state nil :corp-trash pred))))
-                        {:additional-cost [:program]})
-                      {:async true
-                       :cost [:trash]
-                       :show-discard true
-                       :choices {:req (req (and (in-discard? target)
-                                                (program? target)
-                                                (can-pay? state side (assoc eid :source card :source-type :runner-install) target nil
-                                                          [:credit (install-cost state side target {:cost-bonus -3})])))}
-                       :msg (msg "install " (:title target))
-                       :effect (effect (runner-install (assoc eid :source card :source-type :runner-install) target {:cost-bonus -3}))})
-                    card nil))}]})
+  (let [dissoc-cost (req (let [new-ability (dissoc (-> card :abilities first) :additional-cost)]
+                           (update! state side (assoc (get-card state card) :abilities [new-ability]))))
+        assoc-cost (req (let [new-ability (assoc (-> card :abilities first) :additional-cost [:program])]
+                          (update! state side (assoc (get-card state card) :abilities [new-ability]))))]
+    {:abilities [{:async true
+                  :trash-icon true
+                  :label "[trash]: Install a program from the heap"
+                  :additional-cost [:program]
+                  :req (req (and (not (install-locked? state side))
+                                 (some #(and (program? %)
+                                             (can-pay? state side (assoc eid :source card :source-type :runner-install) % nil
+                                                       [:credit (install-cost state side % {:cost-bonus -3})]))
+                                       (:discard runner))))
+                  :show-discard true
+                  :choices {:req (req (and (in-discard? target)
+                                           (program? target)
+                                           (can-pay? state side (assoc eid :source card :source-type :runner-install) target nil
+                                                     [:credit (install-cost state side target {:cost-bonus -3})])))}
+                  :msg (msg "install " (:title target))
+                  :effect (effect (runner-install (assoc eid :source card :source-type :runner-install) target {:cost-bonus -3}))}]
+     :events [{:event :corp-trash
+               :effect dissoc-cost}
+              {:event :runner-trash
+               :effect dissoc-cost}
+              {:event :runner-turn-ends
+               :effect assoc-cost}]
+     :effect (req (when (let [pred #(and (runner? (first %))
+                                         (installed? (first %))
+                                         (program? (first %)))]
+                          (zero? (+ (event-count state nil :runner-trash pred)
+                                    (event-count state nil :corp-trash pred))))
+                    (dissoc-cost state side eid card targets)))}))
 
 (define-card "Skulljack"
   {:effect (effect (damage eid :brain 1 {:card card}))
