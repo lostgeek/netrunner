@@ -747,10 +747,11 @@
 
        :component-did-mount
        (fn [this]
-         (-> ".log" js/$ (.resizable #js {:handles "w, n, nw"
-                                          :resize log-resize
-                                          :start log-start-resize
-                                          :stop log-stop-resize})))
+         )
+         ; (-> ".log" js/$ (.resizable #js {:handles "w, n, nw"
+                                          ; :resize log-resize
+                                          ; :start log-start-resize
+                                          ; :stop log-stop-resize})))
 
        :component-will-update
        (fn [this]
