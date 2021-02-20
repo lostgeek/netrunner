@@ -1032,7 +1032,7 @@
 
 (defn card-zoom-display
   [card]
-  [:div.card-preview.blue-shade
+  [:div.card-preview
    (let [url (image-url card)
          show-img (= "image" (get-in @app-state [:options :card-zoom] "image"))]
      (if (and url show-img)
@@ -2377,7 +2377,7 @@
                                    :spectator @background)
                                  @background)}]
 
-                 [:div.rightpane
+                 [:div.rightpane.panel.panel-mid.blue-shade
                   [:div.card-zoom
                    [card-zoom zoom-card]]
                   [card-implementation zoom-card]
