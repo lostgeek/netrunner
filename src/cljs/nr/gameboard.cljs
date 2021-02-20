@@ -696,8 +696,9 @@
   "Resizes the card zoom based on the values in the app-state"
   (let [width (get-in @app-state [:options :log-width])
         top (get-in @app-state [:options :log-top])
-        max-card-width (- width 5)
-        max-card-height (- top 10)
+        card (:zoom @app-state)
+        max-card-width (if card (- width 5) 0)
+        max-card-height (if card (- top 10) 0)
         card-ratio (/ 418 300)]
     (if (> (/ max-card-height max-card-width) card-ratio)
       (-> ".card-zoom" js/$
