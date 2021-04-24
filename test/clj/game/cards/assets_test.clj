@@ -4344,7 +4344,18 @@
         (click-prompt state :corp "Yes")
         (is (= 1 (count-tags state)) "Runner has 1 tag")
         (click-prompt state :runner "Pay 0 [Credits] to trash")
-        (is (= 5 (count (:discard (get-runner)))) "Runner took 5 damage")))))
+        (is (= 5 (count (:discard (get-runner)))) "Runner took 5 damage"))))
+  (testing "Double Snare in HQ. Issue #5833"
+    (do-game
+      (new-game {:corp {:deck [(qty "Snare!" 3)]}
+                 :runner {:deck [(qty "Sure Gamble" 3) (qty "Legwork" 3)]}})
+      (take-credits state :corp)
+      (play-from-hand state :runner "Legwork")
+      (run-continue state)
+      (click-prompt state :corp "Yes")
+      (click-prompt state :runner "No action")
+      (click-prompt state :corp "Yes")
+      (is (empty? (:hand (get-runner)))) "Runner took damage from both Snares")))
 
 (deftest space-camp
   (testing "when in Archives. #1929"
