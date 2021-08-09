@@ -425,8 +425,9 @@
          nil)))
    [:div.button-bar
     [:div.rooms
-     [room-tab user s games "tournament" (tr [:lobby.tournament "Tournament"])]
-     [room-tab user s games "competitive" (tr [:lobby.competitive "Competitive"])]
+     ; [room-tab user s games "tournament" (tr [:lobby.tournament "Tournament"])]
+     ; [room-tab user s games "competitive" (tr [:lobby.competitive "Competitive"])]
+     [room-tab user s games "competitive" (tr [:lobby.tournament "Tournament"])]
      [room-tab user s games "angel-arena" (tr [:lobby.angel-arena "Angel Arena"])]
      [room-tab user s games "casual" (tr [:lobby.casual "Casual"])]]
     (when (not= "angel-arena" (:room @s))
