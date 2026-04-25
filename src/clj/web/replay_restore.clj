@@ -28,22 +28,26 @@
 (defn move-all-cards-to-decks [game side]
   (let [state (:state game)]
     (doseq [card (get-in @state [side :hand])]
-      (move state :corp card :deck {:suppress-event true :force true}))))
+      (move state side card :deck {:suppress-event true :force true}))))
 
-(defn move-cards-to-hand [game replay-state side]
+(defn move-cards-to-zone [game replay-state side zone]
   (let [state (:state game)
-        target-cards (get-in @replay-state [side :hand])]
+        target-cards (get-in @replay-state [side zone])]
     (doseq [target-card target-cards]
       (let [card (find-card (:title target-card) (get-in @state [side :deck]))]
         ; TODO: Handle the case where the card is not found in the deck
-        (move state side card :hand {:suppress-event true :force true})))))
+        (move state side card zone {:suppress-event true :force true})))))
+
+(def zones {:runner [:hand :deck :discard :scored :rfg :play-area :current]
+            :corp [:hand :deck :discard :scored :rfg :play-area :current]})
 
 (defn setup-state-from-replay [game replay-deps]
   (let [replay-state (:game-state replay-deps)]
     (check-for-correct-ids game replay-state)
-    (move-all-cards-to-decks game :corp)
-    (move-all-cards-to-decks game :runner)
-    (move-cards-to-hand game replay-state :corp)))
+    (doseq [side [:corp :runner]]
+      (move-all-cards-to-decks game side)
+      (doseq [zone (side zones)]
+        (move-cards-to-zone game replay-state side zone)))))
 
 (defn handle-replay-state
   [game {:keys [replay]} replay-timestamp]
