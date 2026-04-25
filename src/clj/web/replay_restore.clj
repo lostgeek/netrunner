@@ -13,8 +13,8 @@
    :replay-status (atom {:autoplay false :speed 1600})
    :replay-timeline (atom [])
    :replay-side (atom :spectator)
-   :load-notes (atom nil)
-   :get-remote-annotations (atom nil)})
+   :load-notes (fn [] nil)
+   :get-remote-annotations (fn [_] nil)})
 
 (defn check-for-correct-ids [game replay-state]
   (let [state (:state game)]
@@ -35,6 +35,7 @@
         target-cards (get-in @replay-state [side :hand])]
     (doseq [target-card target-cards]
       (let [card (find-card (:title target-card) (get-in @state [side :deck]))]
+        ; TODO: Handle the case where the card is not found in the deck
         (move state side card :hand {:suppress-event true :force true})))))
 
 (defn setup-state-from-replay [game replay-deps]
@@ -50,6 +51,7 @@
     (let [history (read-json replay true)
           replay-state (replay-deps game)]
       (reset! (:game-state replay-state) (replay/replay-init-state-from-history history (:gameid game)))
+      (replay/populate-replay-timeline! replay-state @(:game-state replay-state))
       (replay/replay-jump-to! replay-state replay-timestamp)
       (setup-state-from-replay game replay-state)
       (system-msg (:state game) :public "[!] Replay restored")
