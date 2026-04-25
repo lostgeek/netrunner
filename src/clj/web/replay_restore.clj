@@ -33,12 +33,17 @@
     (doseq [card (get-in @state [side :hand])]
       (move state side card :deck {:suppress-event true :force true}))))
 
-(defn move-cards-to-path [game replay-state side path]
-  (let [state (:state game)
-        target-cards (get-in @replay-state (cons side path))]
-    (doseq [target-card target-cards]
-      (when-let [card (find-card (:title target-card) (get-in @state [side :deck]))]
-        (move state side card path {:suppress-event true :force true})))))
+(defn move-cards-to-path
+  ([game replay-state side path]
+   (move-cards-to-path game replay-state side path nil))
+  ([game replay-state side path cid-map]
+   (let [state (:state game)
+         target-cards (get-in @replay-state (cons side path))]
+     (doseq [target-card target-cards]
+       (when-let [card (find-card (:title target-card) (get-in @state [side :deck]))]
+         (let [moved-card (move state side card path {:suppress-event true :force true})]
+           (when (and cid-map (:cid target-card) moved-card)
+            (swap! cid-map assoc (:cid target-card) moved-card))))))))
 
 (def zones {:runner [:hand :deck :discard :scored :rfg :play-area :current]
             :corp [:hand :deck :discard :scored :rfg :play-area :current]})
@@ -47,43 +52,58 @@
   (doseq [side [:corp :runner]]
     (move-all-cards-to-decks game side)))
 
-(defn restore-flat-zones [game replay-state]
+(defn restore-flat-zones [game replay-state cid-map]
   (doseq [side [:corp :runner]
           zone (side zones)]
-    (move-cards-to-path game replay-state side [zone])))
+    (move-cards-to-path game replay-state side [zone] cid-map)))
 
 (defn restore-installed-zones
-  [game replay-state]
+  [game replay-state cid-map]
   (doseq [server (keys (get-in @replay-state [:corp :servers]))]
-    (move-cards-to-path game replay-state :corp [:servers server :content])
-    (move-cards-to-path game replay-state :corp [:servers server :ices]))
+    (move-cards-to-path game replay-state :corp [:servers server :content] cid-map)
+    (move-cards-to-path game replay-state :corp [:servers server :ices] cid-map))
   (doseq [rig-zone [:program :hardware :resource :facedown]]
-    (move-cards-to-path game replay-state :runner [:rig rig-zone])))
+    (move-cards-to-path game replay-state :runner [:rig rig-zone] cid-map)))
 
 (defn apply-visible-card-state [state side live-card replay-card]
-  (let [updated (cond-> live-card
-                  (contains? replay-card :rezzed) (assoc :rezzed (:rezzed replay-card))
-                  (not (contains? replay-card :rezzed)) (dissoc :rezzed)
-                  (contains? replay-card :facedown) (assoc :facedown (:facedown replay-card))
-                  (not (contains? replay-card :facedown)) (dissoc :facedown)
-                  (contains? replay-card :counter) (assoc :counter (:counter replay-card))
-                  (not (contains? replay-card :counter)) (dissoc :counter)
-                  (contains? replay-card :advance-counter) (assoc :advance-counter (:advance-counter replay-card))
-                  (not (contains? replay-card :advance-counter)) (dissoc :advance-counter))]
-    (update! state side updated)))
+  (when live-card
+    (let [updated (cond-> live-card
+                    (contains? replay-card :rezzed) (assoc :rezzed (:rezzed replay-card))
+                    (not (contains? replay-card :rezzed)) (dissoc :rezzed)
+                    (contains? replay-card :facedown) (assoc :facedown (:facedown replay-card))
+                    (not (contains? replay-card :facedown)) (dissoc :facedown)
+                    (contains? replay-card :counter) (assoc :counter (:counter replay-card))
+                    (not (contains? replay-card :counter)) (dissoc :counter)
+                    (contains? replay-card :advance-counter) (assoc :advance-counter (:advance-counter replay-card))
+                    (not (contains? replay-card :advance-counter)) (dissoc :advance-counter))]
+      (update! state side updated))))
 
-(defn restore-hosted-tree [state side live-host replay-host]
-  (doseq [replay-child (:hosted replay-host)]
-    (when-let [live-child (find-card (:title replay-child) (get-in @state [side :deck]))]
-      (let [hosted-card (host state side (get-card state live-host) live-child {:facedown (:facedown replay-child)})]
-        (when hosted-card
-          (apply-visible-card-state state side hosted-card replay-child)
-          (restore-hosted-tree state side hosted-card replay-child))))))
+(defn restore-hosted-tree
+  ([state side live-host replay-host]
+   (restore-hosted-tree state side live-host replay-host nil))
+  ([state side live-host replay-host cid-map]
+   (doseq [replay-child (:hosted replay-host)]
+     (when-let [live-child (find-card (:title replay-child) (get-in @state [side :deck]))]
+       (when-let [live-host-card (get-card state live-host)]
+         (let [hosted-card (host state side live-host-card live-child {:facedown (:facedown replay-child)})]
+         (when hosted-card
+           (when (and cid-map (:cid replay-child))
+             (swap! cid-map assoc (:cid replay-child) hosted-card))
+           (apply-visible-card-state state side hosted-card replay-child)
+           (restore-hosted-tree state side hosted-card replay-child cid-map))))))))
 
-(defn restore-card-and-hosted [state side path replay-card]
-  (when-let [live-card (find-card (:title replay-card) (get-in @state (cons side path)))]
-    (apply-visible-card-state state side live-card replay-card)
-    (restore-hosted-tree state side live-card replay-card)))
+(defn replay-card->live-card [state replay-card cid-map]
+  (let [live-ref (get @cid-map (:cid replay-card))
+        live-card (get-card state live-ref)]
+    (when live-card
+      {:side (keyword (:side live-card))
+       :card live-card})))
+
+(defn restore-card-and-hosted [state replay-card cid-map]
+  (when-let [{:keys [side card]} (replay-card->live-card state replay-card cid-map)]
+    (when card
+      (apply-visible-card-state state side card replay-card)
+      (restore-hosted-tree state side card replay-card cid-map))))
 
 (defn replay-installed-paths [replay-state side]
   (if (= side :corp)
@@ -92,23 +112,24 @@
     [[:rig :program] [:rig :hardware] [:rig :resource] [:rig :facedown]]))
 
 (defn restore-hosted-cards
-  [game replay-state]
+  [game replay-state cid-map]
   (let [state (:state game)]
     (doseq [side [:corp :runner]
             path (replay-installed-paths replay-state side)
             replay-card (get-in @replay-state (cons side path))]
-      (restore-card-and-hosted state side path replay-card))))
+      (restore-card-and-hosted state replay-card cid-map))))
 
 (defn restore-player-state
   [_game _replay-state])
 
 (defn setup-state-from-replay [game replay-deps]
-  (let [replay-state (:game-state replay-deps)]
+  (let [replay-state (:game-state replay-deps)
+        cid-map (atom {})]
     (check-for-correct-ids game replay-state)
     (normalize-all-cards-to-decks game)
-    (restore-flat-zones game replay-state)
-    (restore-installed-zones game replay-state)
-    (restore-hosted-cards game replay-state)
+    (restore-flat-zones game replay-state cid-map)
+    (restore-installed-zones game replay-state cid-map)
+    (restore-hosted-cards game replay-state cid-map)
     (restore-player-state game replay-state)))
 
 (defn handle-replay-state
