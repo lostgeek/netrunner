@@ -48,6 +48,13 @@
 (def zones {:runner [:hand :deck :discard :scored :rfg :play-area :current]
             :corp [:hand :deck :discard :scored :rfg :play-area :current]})
 
+(defn replay-card-side [card]
+  (let [side (:side card)]
+    (cond
+      (keyword? side) side
+      (string? side) (keyword (.toLowerCase side))
+      :else nil)))
+
 (defn normalize-all-cards-to-decks [game]
   (doseq [side [:corp :runner]]
     (move-all-cards-to-decks game side)))
@@ -83,20 +90,21 @@
    (restore-hosted-tree state side live-host replay-host nil))
   ([state side live-host replay-host cid-map]
    (doseq [replay-child (:hosted replay-host)]
-     (when-let [live-child (find-card (:title replay-child) (get-in @state [side :deck]))]
-       (when-let [live-host-card (get-card state live-host)]
-         (let [hosted-card (host state side live-host-card live-child {:facedown (:facedown replay-child)})]
-         (when hosted-card
-           (when (and cid-map (:cid replay-child))
-             (swap! cid-map assoc (:cid replay-child) hosted-card))
-           (apply-visible-card-state state side hosted-card replay-child)
-           (restore-hosted-tree state side hosted-card replay-child cid-map))))))))
+     (let [child-side (or (replay-card-side replay-child) side)]
+       (when-let [live-child (find-card (:title replay-child) (get-in @state [child-side :deck]))]
+         (when-let [live-host-card (get-card state live-host)]
+           (let [hosted-card (host state child-side live-host-card live-child {:facedown (:facedown replay-child)})]
+             (when hosted-card
+               (when (and cid-map (:cid replay-child))
+                 (swap! cid-map assoc (:cid replay-child) hosted-card))
+               (apply-visible-card-state state child-side hosted-card replay-child)
+               (restore-hosted-tree state child-side hosted-card replay-child cid-map)))))))))
 
 (defn replay-card->live-card [state replay-card cid-map]
   (let [live-ref (get @cid-map (:cid replay-card))
         live-card (get-card state live-ref)]
     (when live-card
-      {:side (keyword (:side live-card))
+      {:side (replay-card-side live-card)
        :card live-card})))
 
 (defn restore-card-and-hosted [state replay-card cid-map]
