@@ -2,10 +2,13 @@
   (:require
    [clojure.data.json :refer [read-json]]
    [game.core.card :refer [get-card]]
-   [game.core.say :refer [system-msg]]
+   [game.core.effects :refer [unregister-static-abilities]]
+   [game.core.engine :refer [unregister-events]]
    [game.core.finding :refer [find-card]]
    [game.core.hosting :refer [host]]
+   [game.core.initializing :refer [card-init]]
    [game.core.moving :refer [move]]
+   [game.core.say :refer [system-msg]]
    [game.core.update :refer [update!]]
    [game.replay :as replay]))
 
@@ -130,6 +133,42 @@
 (defn restore-player-state
   [_game _replay-state])
 
+(defn- rehook-side-for-card [card]
+  (or (replay-card-side card)
+      (when (:side card)
+        (keyword (.toLowerCase (str (:side card)))))))
+
+(defn- rehook-single-card! [state card]
+  (when (and card (:cid card) (:title card))
+    (when-let [side (rehook-side-for-card card)]
+      (when-let [c (get-card state card)]
+        (unregister-events state side c)
+        (unregister-static-abilities state side c)
+        (card-init state side c {:resolve-effect false
+                                 :init-data false
+                                 :skip-in-play true
+                                 :skip-recurring true})))))
+
+(defn- rehook-card-tree! [state card]
+  (rehook-single-card! state card)
+  (when-let [c (get-card state card)]
+    (doseq [h (:hosted c)]
+      (rehook-card-tree! state h))))
+
+(defn- restore-engine-hooks! [game]
+  (let [state (:state game)]
+    (doseq [server (sort (keys (get-in @state [:corp :servers])))]
+      (doseq [card (get-in @state [:corp :servers server :content])]
+        (rehook-card-tree! state card))
+      (doseq [card (get-in @state [:corp :servers server :ices])]
+        (rehook-card-tree! state card)))
+    (doseq [row [:program :hardware :resource :facedown]]
+      (doseq [card (get-in @state [:runner :rig row])]
+        (rehook-card-tree! state card)))
+    (doseq [side [:corp :runner]]
+      (when-let [id (get-in @state [side :identity])]
+        (rehook-single-card! state id)))))
+
 (defn setup-state-from-replay [game replay-deps]
   (let [replay-state (:game-state replay-deps)
         cid-map (atom {})]
@@ -138,6 +177,7 @@
     (restore-flat-zones game replay-state cid-map)
     (restore-installed-zones game replay-state cid-map)
     (restore-hosted-cards game replay-state cid-map)
+    (restore-engine-hooks! game)
     (restore-player-state game replay-state)))
 
 (defn handle-replay-state

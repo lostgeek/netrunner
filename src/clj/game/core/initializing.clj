@@ -95,7 +95,7 @@
   "Initializes the abilities and events of the given card."
   ([state side card] (card-init state side card {:resolve-effect true :init-data true}))
   ([state side card args] (card-init state side (make-eid state) card args))
-  ([state side eid card {:keys [resolve-effect init-data no-mu]}]
+  ([state side eid card {:keys [resolve-effect init-data no-mu skip-in-play skip-recurring]}]
    (let [cdef (card-def card)
          recurring (:recurring cdef)
          run-abs (runner-ability-init cdef)
@@ -108,18 +108,18 @@
          c (if init-data c (assoc-in c [:special :skipped-loading] true))
          data (merge
                 (when init-data (:counter (:data cdef)))
-                (when recurring
+                (when (and recurring (not skip-recurring))
                   {:recurring
                    (cond
                      (fn? recurring) (recurring state side eid c nil)
                      (number? recurring) recurring
                      :else (throw (Exception. (str (:title card) " - Recurring isn't number or fn"))))}))
-         _ (when recurring (update! state side (assoc-in c [:counter :recurring] 0)))
+         _ (when (and recurring (not skip-recurring)) (update! state side (assoc-in c [:counter :recurring] 0)))
          _ (doseq [[c-type c-num] data]
              (add-counter state side (make-eid state eid) c c-type c-num {:placed true :suppress-checkpoint true}))
          c (get-card state c)]
      ;; TODO - handle recurring credits as part of the start of turn phase (as in the CR), rather than applying events to each card
-     (when recurring
+     (when (and recurring (not skip-recurring))
        (let [recurring-fn (req (if (number? recurring) recurring (recurring state side eid card targets)))
              r (req (let [card (update! state side (assoc-in card [:counter :recurring] 0))
                           n (recurring-fn state side eid card targets)]
@@ -141,8 +141,9 @@
      (if (and resolve-effect (is-ability? cdef))
        (resolve-ability state side (assoc eid :source-type :ability) (dissoc cdef :cost :additional-cost) c nil)
        (effect-completed state side eid))
-     (when-let [in-play (:in-play cdef)]
-       (apply gain state side in-play))
+     (when-not skip-in-play
+       (when-let [in-play (:in-play cdef)]
+         (apply gain state side in-play)))
      (get-card state c))))
 
 (defn update-ability-cost-str
