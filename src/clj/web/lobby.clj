@@ -107,7 +107,8 @@
     user :user
     {:keys [gameid now
             allow-spectator api-access format mute-spectators password room save-replay
-            precon gateway-type side singleton spectatorhands timer title open-decklists description]
+            precon gateway-type side singleton spectatorhands timer title open-decklists description
+            replay-id replay-timestamp]
      :or {gameid (random-uuid)
           now (inst/now)}} :options}]
   (let [player {:user user
@@ -134,6 +135,8 @@
      :room room
      :save-replay save-replay
      :spectatorhands spectatorhands
+     :replay-id replay-id
+     :replay-timestamp replay-timestamp
      :singleton (when (some #{format} `("standard" "startup" "casual" "eternal")) singleton)
      :timer timer
      :title title}))

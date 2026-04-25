@@ -180,16 +180,16 @@
 
 (defn generate-replay [state]
   (json/generate-string
-    {:metadata {:winner (:winner @state)
-                :reason (:reason @state)
-                :end-date (inst/now)
-                :stats (-> (:stats @state)
-                           (dissoc-in [:time :started])
-                           (dissoc-in [:time :ended]))
-                :turn (:turn @state)
-                :corp.agenda-points (get-in @state [:corp :agenda-point])
-                :runner.agenda-points (get-in @state [:runner :agenda-point])}
-     :history (:history @state)}))
+   {:metadata {:winner (:winner @state)
+               :reason (:reason @state)
+               :end-date (inst/now)
+               :stats (-> (:stats @state)
+                          (dissoc-in [:time :started])
+                          (dissoc-in [:time :ended]))
+               :turn (:turn @state)
+               :corp.agenda-points (get-in @state [:corp :agenda-point])
+               :runner.agenda-points (get-in @state [:runner :agenda-point])}
+    :history (:history @state)}))
 
 (defn game-finished
   [db {:keys [state gameid room] :as game}]
@@ -341,12 +341,20 @@
           (response 404 {:message "Annotations not found"})))
       (response 401 {:message "Unauthorized"}))))
 
+(defn fetch-replay-record
+  "Fetches replay-related game-log fields for a gameid."
+  [db gameid]
+  (mc/find-one-as-map db
+                      :game-logs
+                      {:gameid gameid}
+                      ["corp" "runner" "replay" "replay-shared" "bug-reported"]))
+
 (defn fetch-replay
   [{db :system/db
     {username :username} :user
     {:keys [gameid]} :path-params}]
   (let [{:keys [corp runner replay replay-shared bug-reported]}
-        (mc/find-one-as-map db :game-logs {:gameid gameid} ["corp" "runner" "replay" "replay-shared" "bug-reported"])
+        (fetch-replay-record db gameid)
         replay (or replay {})]
     (if (or bug-reported
             replay-shared
@@ -355,8 +363,8 @@
       (if (empty? replay)
         (response 404 {:message "Replay not found"})
         (json-response 200 (json/generate-string
-                             (assoc (json/parse-string replay true)
-                                    :replay-shared replay-shared))))
+                            (assoc (json/parse-string replay true)
+                                   :replay-shared replay-shared))))
       (response 401 {:message "Unauthorized"}))))
 
 (defn share-replay

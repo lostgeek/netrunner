@@ -23,6 +23,8 @@
    :precon
    :gateway-type
    :open-decklists
+   :replay-id
+   :replay-timestamp
    :timer
    :title])
 
@@ -35,17 +37,17 @@
 
 (defn create-game [state lobby-state options]
   (authenticated
-    (fn [_]
-      (cond
-        (empty? (:title @state))
-        (swap! state assoc :flash-message (tr [:lobby_title-error "Please fill a game title."]))
-        (and (:protected @options)
-             (empty? (:password @options)))
-        (swap! state assoc :flash-message (tr [:lobby_password-error "Please fill a password."]))
-        :else
-        (let [new-game (select-keys (merge @state @options) new-game-keys)]
-          (swap! lobby-state assoc :editing false)
-          (ws/ws-send! [:lobby/create new-game]))))))
+   (fn [_]
+     (cond
+       (empty? (:title @state))
+       (swap! state assoc :flash-message (tr [:lobby_title-error "Please fill a game title."]))
+       (and (:protected @options)
+            (empty? (:password @options)))
+       (swap! state assoc :flash-message (tr [:lobby_password-error "Please fill a password."]))
+       :else
+       (let [new-game (select-keys (merge @state @options) new-game-keys)]
+         (swap! lobby-state assoc :editing false)
+         (ws/ws-send! [:lobby/create new-game]))))))
 
 (defn button-bar [state lobby-state options]
   [:div.button-bar
@@ -73,16 +75,16 @@
   [:section
    [tr-element :h3 [:lobby_side "Side"]]
    (doall
-     (for [option ["Any Side" "Corp" "Runner"]]
-       ^{:key option}
-       [:p
-        [:label [:input
-                 {:type "radio"
-                  :name "side"
-                  :value option
-                  :on-change #(reset! side-state (.. % -target -value))
-                  :checked (= @side-state option)}]
-         (tr-side option)]]))])
+    (for [option ["Any Side" "Corp" "Runner"]]
+      ^{:key option}
+      [:p
+       [:label [:input
+                {:type "radio"
+                 :name "side"
+                 :value option
+                 :on-change #(reset! side-state (.. % -target -value))
+                 :checked (= @side-state option)}]
+        (tr-side option)]]))])
 
 (defn singleton-only [options fmt-state]
   [:label
@@ -100,16 +102,16 @@
   [:div
    {:style {:display (if (= @fmt-state "system-gateway") "block" "none")}}
    (doall
-     (for [option ["Beginner" "Intermediate" "Constructed"]]
-       ^{:key option}
-       [:span [:label [:input
-                       {:type "radio"
-                        :name "gateway-type"
-                        :value option
-                        :on-change #(reset! gateway-type (.. % -target -value))
-                        :checked (= @gateway-type option)}]
-               [tr-span [:lobby_gateway-format option] {:format option}]
-               "    "]]))])
+    (for [option ["Beginner" "Intermediate" "Constructed"]]
+      ^{:key option}
+      [:span [:label [:input
+                      {:type "radio"
+                       :name "gateway-type"
+                       :value option
+                       :on-change #(reset! gateway-type (.. % -target -value))
+                       :checked (= @gateway-type option)}]
+              [tr-span [:lobby_gateway-format option] {:format option}]
+              "    "]]))])
 
 (defn precon-choice [fmt-state precon]
   [:div
@@ -121,9 +123,9 @@
      {:value (or @precon "worlds-2012-a")
       :on-change #(reset! precon (.. % -target -value))}
      (doall
-       (for [matchup (sort all-matchups)]
-         ^{:key (name matchup)}
-         [:option {:value (name matchup)} (tr (:tr-inner (matchup-by-key matchup)))]))]]])
+      (for [matchup (sort all-matchups)]
+        ^{:key (name matchup)}
+        [:option {:value (name matchup)} (tr (:tr-inner (matchup-by-key matchup)))]))]]])
 
 (defn format-section [fmt-state options gateway-type precon]
   [:section
@@ -132,9 +134,9 @@
     {:value (or @fmt-state "standard")
      :on-change #(reset! fmt-state (.. % -target -value))}
     (doall
-      (for [[k v] slug->format]
-        ^{:key k}
-        [:option {:value k} (tr-format v)]))]
+     (for [[k v] slug->format]
+       ^{:key k}
+       [:option {:value k} (tr-format v)]))]
    [singleton-only options fmt-state]
    [gateway-constructed-choice fmt-state gateway-type]
    [precon-choice fmt-state precon]
@@ -160,10 +162,10 @@
 
 (defn allow-spectators [options]
   [:p
-    [:label
-     [:input {:type "checkbox" :checked (:allow-spectator @options)
-              :on-change #(swap! options assoc :allow-spectator (.. % -target -checked))}]
-     [tr-span [:lobby_spectators "Allow spectators"]]]])
+   [:label
+    [:input {:type "checkbox" :checked (:allow-spectator @options)
+             :on-change #(swap! options assoc :allow-spectator (.. % -target -checked))}]
+    [tr-span [:lobby_spectators "Allow spectators"]]]])
 
 (defn toggle-hidden-info [options]
   [:<>
@@ -250,6 +252,26 @@
     {:style {:display (if (:api-access @options) "block" "none")}}
     [tr-element :p [:lobby_api-access-details "This allows access to information about your game to 3rd party extensions. Requires an API Key to be created in Settings."]]]])
 
+(defn replay-section [replay-id replay-n replay-d]
+  "Temporary debug section to load in replay state"
+  [:section
+   [tr-element :h3 [:lobby_replay "Replay"]]
+   [:input.game-title
+    {:on-change #(reset! replay-id (.. % -target -value))
+     :value @replay-id
+     :data-i18n-key :lobby_replay-id
+     :placeholder (tr [:lobby_replay-id "Replay ID"])}]
+   [:input.game-title
+    {:on-change #(reset! replay-n (.. % -target -value))
+     :value @replay-n
+     :data-i18n-key :lobby_replay-n
+     :placeholder (tr [:lobby_replay-n "Replay N"])}]
+   [:input.game-title
+    {:on-change #(reset! replay-d (.. % -target -value))
+     :value @replay-d
+     :data-i18n-key :lobby_replay-d
+     :placeholder (tr [:lobby_replay-d "Replay D"])}]])
+
 (defn options-section [options user]
   [:section
    [tr-element :h3 [:lobby_options "Options"]]
@@ -277,6 +299,8 @@
                                 :singleton false
                                 :spectatorhands false
                                 :open-decklists false
+                                :replay-id "b516ee76-bab7-47f7-9f3c-cae1f45493f1"
+                                :replay-timestamp {:n 4 :d 0}
                                 :timed false
                                 :timer nil})
                title (r/cursor state [:title])
@@ -285,7 +309,10 @@
                gateway-type (r/cursor state [:gateway-type])
                fmt (r/cursor state [:format])
                description (r/cursor state [:description])
-               flash-message (r/cursor state [:flash-message])]
+               flash-message (r/cursor state [:flash-message])
+               replay-id (r/cursor options [:replay-id])
+               replay-n (r/cursor options [:replay-timestamp :n])
+               replay-d (r/cursor options [:replay-timestamp :d])]
     (fn [lobby-state user]
       [:div
        [button-bar state lobby-state options]
@@ -301,4 +328,5 @@
         [side-section side]
         [format-section fmt options gateway-type precon]
         [description-section description]
+        [replay-section replay-id replay-n replay-d]
         [options-section options user]]])))
