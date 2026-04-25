@@ -3,7 +3,6 @@
    [cheshire.core :as json]
    [cljc.java-time.instant :as inst]
    [clojure.string :as str]
-   [clojure.data.json :refer [read-json]]
    [cond-plus.core :refer [cond+]]
    [game.core.commands :as commands :refer [parse-command]]
    [game.core.diffs :as diffs]
@@ -18,9 +17,10 @@
    [taoensso.timbre :as timbre]
    [web.app-state :as app-state]
    [web.lobby :as lobby]
+   [web.replay-restore :as replay-restore]
    [web.stats :as stats]
    [web.ws :as ws]
-   [game.replay :as replay]))
+   [game.core :refer [make-message]]))
 
 (defn game-diff-json
   "Converts the appropriate diff to json"
@@ -152,27 +152,6 @@
       (set-precon-deck "Corp" (:corp precon-match))
       (set-precon-deck "Runner" (:runner precon-match))))
 
-
-(defn replay-deps [game]
-  {:app-state (atom {})
-   :game-state (atom {})
-   :last-state (atom {})
-   :replay-status (atom {:autoplay false :speed 1600})
-   :replay-timeline (atom [])
-   :replay-side (atom :spectator)
-   :load-notes (atom nil)
-   :get-remote-annotations (atom nil)})
-
-(defn handle-replay-state
-  [game {:keys [replay]} replay-timestamp]
-  (when replay
-    (let [history (read-json replay true)
-          replay-deps (replay-deps game)]
-      (reset! (:game-state replay-deps) (replay/replay-init-state-from-history history (:gameid game)))
-      (replay/replay-jump-to! replay-deps replay-timestamp)
-      (println "new-replay-deps:" replay-deps)
-      game)))
-
 (defn handle-precon-decks
   [game]
   (if-let [precon (:precon game)]
@@ -185,20 +164,29 @@
 
 (defn handle-start-game [lobbies gameid players now replay-record replay-timestamp]
   (if-let [lobby (get lobbies gameid)]
-    (as-> lobby g
-      (handle-precon-decks g)
-      (merge g {:started true
-                :original-players players
-                :ending-players players
-                :start-date now
-                :last-update now
-                :state (init-game g)})
-      (if (not (empty? replay-record))
-        (handle-replay-state g replay-record replay-timestamp)
-        g)
-      (check-for-starter-decks g)
-      (update g :players #(mapv strip-deck %))
-      (assoc lobbies gameid g))
+    (try
+      (as-> lobby g
+        (handle-precon-decks g)
+        (merge g {:started true
+                  :original-players players
+                  :ending-players players
+                  :start-date now
+                  :last-update now
+                  :state (init-game g)})
+        (if (not (empty? replay-record))
+          (replay-restore/handle-replay-state g replay-record replay-timestamp)
+          g)
+        (check-for-starter-decks g)
+        (update g :players #(mapv strip-deck %))
+        (assoc lobbies gameid g))
+      (catch Exception e
+        (if (not (empty? replay-record))
+          (let [message (make-message {:user {:username "ERROR DURING REPLAY RESTORATION" :uid "ERROR DURING REPLAY RESTORATION"}
+                                       :text (str (.getMessage e))})]
+            (-> lobbies
+                (lobby/handle-send-message gameid message)
+                (lobby/handle-set-last-update gameid "ERROR DURING REPLAY RESTORATION")))
+          (throw e))))
     lobbies))
 
 (defn try-start-game
