@@ -4,6 +4,7 @@
    [cljs.core.async :refer [<!] :as async]
    [clojure.set :refer [difference union]]
    [clojure.string :as str]
+   [game.replay :as game-replay]
    [nr.ajax :refer [GET]]
    [nr.angel-arena.lobby :as angel-arena]
    [nr.appstate :refer [app-state current-gameid]]
@@ -75,13 +76,7 @@
              (case status
                200
                (let [replay (js->clj json :keywordize-keys true)
-                     history (:history replay)
-                     replay-shared (:replay-shared replay)
-                     init-state (first history)
-                     init-state (assoc init-state :gameid gameid :replay-shared replay-shared)
-                     init-state (assoc-in init-state [:options :spectatorhands] true)
-                     diffs (rest history)
-                     init-state (assoc init-state :replay-diffs diffs)]
+                     init-state (game-replay/replay-init-state-from-history replay gameid)]
                  (ws/event-msg-handler-wrapper
                    {:id :game/start
                     :?data (.stringify js/JSON (clj->js

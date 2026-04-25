@@ -2,24 +2,25 @@
   (:require
    [cheshire.core :as json]
    [cljc.java-time.instant :as inst]
-   [clojure.stacktrace :as stacktrace]
    [clojure.string :as str]
+   [clojure.data.json :refer [read-json]]
    [cond-plus.core :refer [cond+]]
    [game.core.commands :as commands :refer [parse-command]]
    [game.core.diffs :as diffs]
+   [game.core.finding :refer [find-latest]]
    [game.core.say :refer [make-system-message]]
    [game.core.set-up :refer [init-game]]
-   [game.core.finding :refer [find-latest]]
    [game.main :as main]
+   [jinteki.chimera :as chimera]
    [jinteki.preconstructed :as preconstructed]
    [jinteki.utils :refer [side-from-str]]
-   [jinteki.chimera :as chimera]
    [medley.core :refer [find-first]]
+   [taoensso.timbre :as timbre]
    [web.app-state :as app-state]
    [web.lobby :as lobby]
    [web.stats :as stats]
    [web.ws :as ws]
-   [taoensso.timbre :as timbre]))
+   [game.replay :as replay]))
 
 (defn game-diff-json
   "Converts the appropriate diff to json"
@@ -151,11 +152,25 @@
       (set-precon-deck "Corp" (:corp precon-match))
       (set-precon-deck "Runner" (:runner precon-match))))
 
+
+(defn replay-deps [game]
+  {:app-state (atom {})
+   :game-state (atom {})
+   :last-state (atom {})
+   :replay-status (atom {:autoplay false :speed 1600})
+   :replay-timeline (atom [])
+   :replay-side (atom :spectator)
+   :load-notes (atom nil)
+   :get-remote-annotations (atom nil)})
+
 (defn handle-replay-state
-  [game replay-record]
-  (when (not (empty? replay-record))
-    (let [timestamp (:replay-timestamp game)]
-      (println "found replay state for game:" replay-record)
+  [game {:keys [replay]} replay-timestamp]
+  (when replay
+    (let [history (read-json replay true)
+          replay-deps (replay-deps game)]
+      (reset! (:game-state replay-deps) (replay/replay-init-state-from-history history (:gameid game)))
+      (replay/replay-jump-to! replay-deps replay-timestamp)
+      (println "new-replay-deps:" replay-deps)
       game)))
 
 (defn handle-precon-decks
@@ -168,12 +183,9 @@
         (set-precon-match game {:corp corp-deck :runner runner-deck}))
       game)))
 
-(defn handle-start-game [lobbies gameid players now replay-record]
+(defn handle-start-game [lobbies gameid players now replay-record replay-timestamp]
   (if-let [lobby (get lobbies gameid)]
     (as-> lobby g
-      (if (not (empty? replay-record))
-        (handle-replay-state g replay-record)
-        g)
       (handle-precon-decks g)
       (merge g {:started true
                 :original-players players
@@ -181,6 +193,9 @@
                 :start-date now
                 :last-update now
                 :state (init-game g)})
+      (if (not (empty? replay-record))
+        (handle-replay-state g replay-record replay-timestamp)
+        g)
       (check-for-starter-decks g)
       (update g :players #(mapv strip-deck %))
       (assoc lobbies gameid g))
@@ -192,9 +207,10 @@
     (when (and lobby (lobby/first-player? uid lobby) (not started))
       (let [now (inst/now)
             replay-record (stats/fetch-replay-record db (:replay-id lobby))
+            replay-timestamp (:replay-timestamp lobby)
             new-app-state
             (swap! app-state/app-state
-                   update :lobbies handle-start-game gameid players now replay-record)
+                   update :lobbies handle-start-game gameid players now replay-record replay-timestamp)
             lobby? (get-in new-app-state [:lobbies gameid])]
         (when lobby?
           (stats/game-started db lobby?)

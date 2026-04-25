@@ -10,6 +10,14 @@
              :replay true)
       (assoc-in [:options :spectatorhands] true)))
 
+(defn replay-init-state-from-history
+  [{:keys [history replay-shared]} gameid]
+  (let [init-state (first history)
+        init-state (assoc init-state :gameid gameid :replay-shared replay-shared)
+        init-state (assoc-in init-state [:options :spectatorhands] true)
+        diffs (rest history)]
+    (assoc init-state :replay-diffs diffs)))
+
 (defn replay-reached-end?
   [replay-status replay-timeline]
   (and (empty? (:diffs replay-status))
@@ -29,19 +37,12 @@
   (reset! last-state @game-state))
 
 (defn replay-jump!
-  [{:keys [app-state game-state last-state replay-status replay-timeline replay-side load-notes]} n]
+  [{:keys [app-state game-state last-state replay-status replay-timeline replay-side load-notes] :as replay-deps} n]
   (cond
     (neg? n)
     (do
       (swap! app-state assoc :start-shown false)
-      (replay-jump! {:app-state app-state
-                     :game-state game-state
-                     :last-state last-state
-                     :replay-status replay-status
-                     :replay-timeline replay-timeline
-                     :replay-side replay-side
-                     :load-notes load-notes}
-                    0))
+      (replay-jump! replay-deps 0))
 
     (< n (count @replay-timeline))
     (do
